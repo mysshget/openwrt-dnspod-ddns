@@ -3,22 +3,17 @@
 #admin@zhetenger.com
 #http://www.terryche.me/openwrt-dnspod-ddns.html
 
-#dnspod帐号名
-email='***@gmail.com'
-
-#dnspod密码
-password='***'
+#token
+token=''
 
 #域名
-domainname='***.com'
+domainname='11111.me'
 
 #需要更新的子域名列表，多个的话，以空格分割。
 #例如：
 #  sub_domains='www home'
-sub_domains='home'
+sub_domains='xxxxxxx'
 
-#check for changed ip every 300 seconds
-wait=300
 
 #检查是否安装curl
 curl_status=`which curl 2>/dev/null`
@@ -32,8 +27,7 @@ lang='en'
 record_type='A'
 offset="2"
 length=""
-common_options="--data-urlencode \"login_email=${email}\"\
-				--data-urlencode \"login_password=${password}\"\
+common_options="--data-urlencode \"login_token=${token}\"\
 				--data-urlencode \"format=${format}\"\
 				--data-urlencode \"lang=${lang}\""
 PROGRAM=$(basename $0)
@@ -48,11 +42,6 @@ printMsg() {
 	fi
 }
 
-getIp() {
-#	curl -s http://checkip.dyndns.com | sed -n 's/.*: \([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\).*/\1/p'
-	curl -s http://members.3322.org/dyndns/getip
-}
-
 getJsonValue(){
 	local params="$1"
 	echo $json_data | sed 's/\\\\\//\//g' | sed 's/[{}]//g;s/\(\[\|\]\)//g' |\
@@ -64,7 +53,7 @@ getJsonValue(){
 execAPI() {
 	local action="$1"
 	local extra_options="$2"
-	eval "curl -k -A 'xddns' ${API_url}/${action} ${common_options} ${extra_options}"
+	eval "curl -s -k -A  'xddns' ${API_url}/${action} ${common_options} ${extra_options}"
 }
 
 getDomainId() {
@@ -115,79 +104,20 @@ updateRecord() {
 		extra_options="--data-urlencode \"domain_id=${domain_id}\"\
 						--data-urlencode \"record_id=${record_id}\"\
 						--data-urlencode \"sub_domain=${tmp_sub_domains}\"\
-						--data-urlencode \"record_type=${record_type}\"\
-						--data-urlencode \"record_line=默认\"\
-						--data-urlencode \"value=${pub_ip_addr}\"\
-						--data-urlencode \"mx=1\""
-		json_data=$(execAPI "Record.Modify" "${extra_options}")
+						--data-urlencode \"record_line=默认\""
+		json_data=$(execAPI "Record.Ddns" "${extra_options}")
 		printMsg "Update [${tmp_sub_domains}.${domainname}] ${record_type} record to [${pub_ip_addr}] : $(getJsonValue message)"
 	done
 	printMsg 'Update records finish'
 }
 
-checkip() {
-	local oldip=$pub_ip_addr
-	pub_ip_addr=$(getIp)
-	printMsg "old ip: [$oldip], new ip: [$pub_ip_addr]"
-	if [ "$pub_ip_addr" != "$oldip" ];then
-		return 8
-	else
-		return 3
-	fi
-}
-
-updateTunnelBroker() {
-	printMsg "Start Update Tunnel Broker"
-	printMsg "User Name: ***, Tunnel ID: ***"
-	result=$(curl -s --insecure https://ipv4.tunnelbroker.net/nic/update --data-urlencode "username=***" --data-urlencode "password=***" --data-urlencode "hostname=***")
-	printMsg "Update Tunnel Broker: ${result}"
-	printMsg "Update Tunnel Broker finish"
-}
-
-execSvc() {
-	local ip
-	#check that whether the network is ok
-	while [ 1 ];do
-		ip=$(getIp)
-		if [ -n "$ip" ];then
-			printMsg "WAN IP: ${ip}"
-			break;
-		else
-			printMsg "Can't get wan ip"
-			sleep 30
-		fi
-	done
-
-	domain_id=`getDomainId $domainname`
-	printMsg "domain_id: ${domain_id}"
-	while [ 1 ];do
-		checkip
-		if [ $? -eq 8 ];then
-			updateRecord
-			#updateTunnelBroker
-		fi
-		sleep $wait
-	done
-}
 
 execUpdate() {
 	domain_id=`getDomainId $domainname`
-	pub_ip_addr=$(getIp)
 	updateRecord
 }
 
-case $1 in
-	--svc)
-		is_svc=1;
-		printMsg 'Start in Service mode';
-		printMsg "domain: ${domainname}, sub_domains: ${sub_domains}";
-		execSvc;;
-	--ipv6)
-		is_svc=0;
-		printMsg "Start update HE Tunnel Broker";
-		updateTunnelBroker;;
-	*)
-		is_svc=0;
-		printMsg "Start update record, domain: ${domainname}, sub_domains: ${sub_domains}";
-		execUpdate;;
-esac
+
+printMsg "Start update record, domain: ${domainname}, sub_domains: ${sub_domains}";
+execUpdate;
+
